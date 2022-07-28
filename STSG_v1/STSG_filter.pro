@@ -1,3 +1,4 @@
+
 function STSG_filter, win, sampcorr, img_NDVI,img_QA, reference_data, dims,snow_address, vector_out            
      
 subs = n_elements(img_NDVI[*,0,0,0])              
@@ -14,12 +15,12 @@ for ii = win, subs-1-win do begin
     endif 
      
     for year = 0, yearnum-1 do begin
-      vector_in = reform(img_NDVI[ii,jj,*,year],nb)
+      VI_raw = reform(img_NDVI[ii,jj,*,year],nb)
       vector_QA = reform(img_QA[ii,jj,*,year],nb)
-      res = reverse(sort(vector_in))
-      if mean(vector_in[res[0:2]]) gt 0.15 then begin   
+      res = reverse(sort(VI_raw))
+      if mean(VI_raw[res[0:2]]) gt 0.15 then begin   
           
-      num_elements = n_elements(vector_in) 
+      num_elements = n_elements(VI_raw) 
       indic = 0         
       ;searching similar pixels
       if year eq 0 then begin
@@ -68,11 +69,13 @@ for ii = win, subs-1-win do begin
               
          new_corr = reverse(sort(corr_res))
          for i = 0, samp-1 do begin
-           similar_index[1,i] = fix(new_corr[i+1]/(2*win+1))+jj-win 
-           similar_index[0,i] = new_corr[i+1]-fix(new_corr[i+1]/(2*win+1))*(2*win+1)+ii-win
-           slope_intercept[1,i] = Slope_res[fix(new_corr[i+1]/(2*win+1)), new_corr[i+1]-fix(new_corr[i+1]/(2*win+1))*(2*win+1)]
-           slope_intercept[0,i] = Intercept_res[fix(new_corr[i+1]/(2*win+1)), new_corr[i+1]-fix(new_corr[i+1]/(2*win+1))*(2*win+1)]  
-           corr_similar[i] = new_corr_similar_res[fix(new_corr[i+1]/(2*win+1)), new_corr[i+1]-fix(new_corr[i+1]/(2*win+1))*(2*win+1)]   
+           row = fix(new_corr[i+1]/(2*win+1))
+           col = new_corr[i+1]-fix(new_corr[i+1]/(2*win+1))*(2*win+1)
+           similar_index[1,i] = row + jj - win
+           similar_index[0,i] = col + ii - win
+           slope_intercept[1,i] = Slope_res[row, col]
+           slope_intercept[0,i] = Intercept_res[row, col]  
+           corr_similar[i] = new_corr_similar_res[row, col]   
          endfor
          aap = 1    
        endif else begin
@@ -84,33 +87,39 @@ for ii = win, subs-1-win do begin
         if aap eq 1 then begin    
           temp_NDVI = fltarr(nb,samp)
           trend_NDVI = fltarr(nb)
-          vector_in = reform(img_NDVI[ii,jj,*,year],nb)
+          VI_raw = reform(img_NDVI[ii,jj,*,year],nb)
           vector_QA = float(reform(img_QA[ii,jj,*,year],nb))   
             
-          for i = 0, nb-1 do begin
+          for i = 0, nb-1 do begin ; loop for every doy
             for j = 0, samp-1 do begin
-              if img_QA[similar_index[0,j],similar_index[1,j],i,year] le 1 then begin
-                 new_ratio = img_NDVI[similar_index[0,j],similar_index[1,j],i,year]/reference_data[similar_index[0,j],similar_index[1,j],i]
-                 temp_NDVI[i,j] = (slope_intercept[0,j]+new_ratio*slope_intercept[1,j])*reference_data[ii,jj,i]
+              row = similar_index[0,j]
+              col = similar_index[1,j]
+              if img_QA[row,col,i,year] le 1 then begin
+                ; tar: ii,jj
+                 new_ratio = img_NDVI[row, col, i, year]/reference_data[row, col, i]
+                 temp_NDVI[i,j] = (slope_intercept[0,j]+new_ratio*slope_intercept[1,j])*reference_data[ii,jj,i] ; Eq. 2-3
+
                  if temp_NDVI[i,j] ge 1 or temp_NDVI[i,j] le -0.2 then temp_NDVI[i,j] = 0.  
-              endif       
+              endif
             endfor
             
-            res = where(finite(temp_NDVI[i,*]) eq 0, count)
+            res = where(finite(temp_NDVI[i,*]) eq 0, count) ; 查找NA
             if count ne 0 then temp_NDVI[i,res] = 0.
             res = where(temp_NDVI[i,*] ne 0., count)
             if count ne 0 then begin
                new_corr_similar = corr_similar
-               new_corr_similar[res] = new_corr_similar[res]/total(new_corr_similar[res])
-               trend_NDVI[i] = total(new_corr_similar[res]*temp_NDVI[i,res])
-            endif   
-          endfor             
-            
+               ; 此处公式不一致,R_ij并未进行标准化处理
+               new_corr_similar[res] = new_corr_similar[res]/total(new_corr_similar[res]) ; Eq. 5
+               trend_NDVI[i] = total(new_corr_similar[res]*temp_NDVI[i,res])    ; the initial NDVI time-series synchronized by reference curve  
+            endif
+          endfor
+          
           ; generating the trend_NDVI
           res = where(finite(trend_NDVI) eq 0, count)
           if count ne 0 then trend_NDVI[res] = 0.
           res = where(trend_NDVI ne 0., count)
           
+          ; 进行插值处理的操作
           if count ge nb/2 then begin
             conres = res[1:count-1]-res[0:count-2]
             continue_index = where(conres ge 3, count)
@@ -146,32 +155,35 @@ for ii = win, subs-1-win do begin
             endfor
             if bv_count ne 0 then begin
               bv = bv_total/bv_count
-              vector_in[snowres] =  bv
+              VI_raw[snowres] =  bv
               trend_NDVI[snowres] = bv
             endif
           endif
           endif
 
-          rst = trend_NDVI
-          num_elements = n_elements(vector_in)
+          VI_init = trend_NDVI
+          num_elements = n_elements(VI_raw); 1:nptperyear
           ; Calculate the weights for each point
-          gdis = 0.0
           fl = fltarr(num_elements)
-          maxdif = max(abs(vector_in-rst))
+          maxdif = max(abs(VI_raw-VI_init))
           for i = 0,(num_elements-1) do begin
             case vector_QA[i] of 
-            0: fl[i] = (0. > vector_in[i]-rst[i])
-            1: fl[i] = vector_in[i]-rst[i]
+            0: fl[i] = (0. > VI_raw[i]-VI_init[i]) ; Eq. 6-1, max(0, VI_raw[i]-VI_init[i])
+            1: fl[i] = VI_raw[i]-VI_init[i]        ; Eq. 6-2
             else: fl[i] = -1.0
             endcase
          endfor
          res = where(fl ne -1.0, count)
-         if count ne 0 then meanfl = mean(fl[res])
-         res = where(fl eq -1.0, count)
-         if count ne 0 then fl[res] = meanfl
+         if count ne 0 then begin
+          ; 由于质量不佳的部分，会被VI_init替代，因此，这部分可以设置一个中等权重
+          meanfl = mean(fl[res]) ; Eq. 6-3
+          fl[res] = meanfl
+         endif
+
+         gdis = 0.0
          for i =0,(num_elements-1) do begin
-           fl[i] = (fl[i]-min(fl))/(max(fl)-min(fl))
-           gdis = gdis + fl[i]*abs(vector_in[i]-rst[i])
+           fl[i] = (fl[i]-min(fl))/(max(fl)-min(fl)); Eq. 7
+           gdis = gdis + fl[i]*abs(VI_raw[i]-VI_init[i])
          endfor
          ra4 = fltarr(num_elements)
          pre = fltarr(num_elements)
@@ -179,29 +191,31 @@ for ii = win, subs-1-win do begin
          ormax = gdis
               
          ress = where(vector_QA eq 0, count)
-         if count ne 0 then rst[ress] = vector_in[ress]
+         if count ne 0 then VI_init[ress] = VI_raw[ress]
          ress = where(vector_QA ne 0 and vector_QA ne 1, count)
-         if count ne 0 then vector_in[ress] = rst[ress]
+         if count ne 0 then VI_raw[ress] = VI_init[ress]
     
          loop_times = 0l
          while (gdis le ormax) && loop_times LT 50 do begin
              loop_times = loop_times +1
              for i =0,(num_elements-1) do begin
-               ra4[i] = (vector_in[i] ge rst[i]) ? vector_in[i] : rst[i]
-               pre[i] = rst[i]
+               ra4[i] = (VI_raw[i] ge VI_init[i]) ? VI_raw[i] : VI_init[i]
+               pre[i] = VI_init[i]
              endfor
              ; The Savitzky-Golay fitting
              ;savgolFilter = SAVGOL(4, 4, 0, 6) ;set the window width(4,4) and degree (6) for repetition
              savgolFilter = [-0.00543880, 0.0435097, -0.152289, 0.304585, 0.619267, 0.304585, -0.152289, 0.0435097, -0.00543880]
-             rst = CONVOL(ra4, savgolFilter, /EDGE_TRUNCATE)
+            ; 这里并未考虑权重，如何体现加权回归？
+             VI_init = CONVOL(ra4, savgolFilter, /EDGE_TRUNCATE)
              ormax = gdis
              ; Calculate the fitting-effect index
              gdis = 0.0
              for i =0,(num_elements-1) do begin
-                gdis = gdis + fl[i]*abs(vector_in[i]-rst[i])
+                gdis = gdis + fl[i]*abs(VI_raw[i]-VI_init[i])
              endfor
           endwhile
-           
+          
+          ; 5点平滑
           vec_fil = pre
           for smi = 0, nb-5 do begin
             a1 = vec_fil[smi]
@@ -233,31 +247,31 @@ for ii = win, subs-1-win do begin
             endfor
             if bv_count ne 0 then begin
               bv = bv_total/bv_count
-              vector_in[snowres] =  bv
+              VI_raw[snowres] =  bv
             endif
           endif
           endif
           
           res = where(vector_QA le 2, count)
           if count lt nb then begin
-            V = vector_in[res]
+            V = VI_raw[res]
             Xout = indgen(nb)
-            vector_in = interpol(V, res, Xout)
+            VI_raw = interpol(V, res, Xout)
           endif
           
-           num_elements = n_elements(vector_in)
-           vector_in=reform(vector_in,num_elements)      
+           num_elements = n_elements(VI_raw)
+           VI_raw=reform(VI_raw,num_elements)      
            ;savgolFilter = SAVGOL(4,4,0,2) ;set the window width(4,4) and degree (2) for computing trend curve
            savgolFilter = [-0.0909091, 0.0606061, 0.168831, 0.233766, 0.255411, 0.233766, 0.168831, 0.0606061, -0.0909091]
-           rst = CONVOL(vector_in, savgolFilter, /EDGE_TRUNCATE)
+           VI_init = CONVOL(VI_raw, savgolFilter, /EDGE_TRUNCATE)
 
            ; Calculate the weights for each point
-           gdis = 0.0
            fl = fltarr(num_elements)
-           maxdif = max(abs(vector_in-rst))
+           maxdif = max(abs(VI_raw-VI_init))
+           gdis = 0.0
            for i =0,(num_elements-1) do begin
-             fl[i] = (vector_in[i] ge rst[i]) ? 1.0 : (1-abs(vector_in[i]-rst[i])/maxdif)
-             gdis = gdis + fl[i]*abs(vector_in[i]-rst[i])
+             fl[i] = (VI_raw[i] ge VI_init[i]) ? 1.0 : (1-abs(VI_raw[i]-VI_init[i])/maxdif)
+             gdis = gdis + fl[i]*abs(VI_raw[i]-VI_init[i])
            endfor
 
            ra4 = fltARR(num_elements)
@@ -270,32 +284,39 @@ for ii = win, subs-1-win do begin
            while (gdis le ormax) && loop_times LT 15 do begin
               loop_times = loop_times +1
               for i =0,(num_elements-1) do begin
-                ra4[i] = (vector_in[i] ge rst[i]) ? vector_in[i] : rst[i]
-                pre[i] = rst[i]
+                ra4[i] = (VI_raw[i] ge VI_init[i]) ? VI_raw[i] : VI_init[i]
+                pre[i] = VI_init[i]
               endfor
               ; The Savitzky-Golay fitting
               ;savgolFilter = SAVGOL(4, 4, 0, 6)  ;set the window width(4,4) and degree (6) for repetition
               savgolFilter = [-0.00543880, 0.0435097, -0.152289, 0.304585, 0.619267, 0.304585, -0.152289, 0.0435097, -0.00543880]
-              rst = CONVOL(ra4, savgolFilter, /EDGE_TRUNCATE)
+              VI_init = CONVOL(ra4, savgolFilter, /EDGE_TRUNCATE)
               ormax = gdis
               ; Calculate the fitting-effect index
               gdis = 0.0
               for i =0,(num_elements-1) do begin
-                gdis = gdis + fl[i]*abs(vector_in[i]-rst[i])
+                gdis = gdis + fl[i]*abs(VI_raw[i]-VI_init[i])
               endfor
             endwhile
             vector_out[ii,jj-win,0:(nb-1),year] = pre 
           endif
           
-        endif;if max(vector_in) gt 0.15 
+        endif;if max(VI_raw) gt 0.15 
       endfor;for year
     endfor
- endfor
-    
- return, vector_out
-
-    
- 
+endfor
+  
+return, vector_out
 
 
+end
+
+function cal_gdist, dist_norm, VI_raw, VI_init
+; gdis = cal_gdist(fl, VI_raw, VI_init)
+  gdist = 0
+  num_elements = n_elements(VI_raw) 
+  for i =0,(num_elements-1) do begin
+    gdist = gdist + dist_norm[i]*abs(VI_raw[i]-VI_init[i])
+  endfor
+  return, gdist
 end

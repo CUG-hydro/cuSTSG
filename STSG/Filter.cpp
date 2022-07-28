@@ -14,25 +14,26 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
             float *slope_intercept = new float[2 * (2 * win + 1) * (2 * win + 1)];
             float *corr_similar = new float[(2 * win + 1) * (2 * win + 1)];
             for (int y = 0; y < ny; y++) {
-                float *vector_in = new float[nb];
+                float *VI_raw = new float[nb];
                 float *vector_QA = new float[nb];
-                float *res_vector_in = new float[nb];
+                float *res_VI_raw = new float[nb];
                 for (int k = 0; k < nb; k++) {
-                    vector_in[k] = img_NDVI[i + j * ns + k * ns * nl + y * ns * nl * nb];
-                    vector_QA[k] = img_QA[i + j * ns + k * ns * nl + y * ns * nl * nb];
-                    res_vector_in[k] = img_NDVI[i + j * ns + k * ns * nl + y * ns * nl * nb];
+                    int ind = gdis = i + j * ns + k * ns * nl + y * ns * nl * nb;
+                    VI_raw[k] = img_NDVI[ind];
+                    vector_QA[k] = img_QA[ind];
+                    res_VI_raw[k] = img_NDVI[ind];
                 }
 
                 for (int m = 0; m < nb - 1; m++) {
                     for (int n = m + 1; n < nb; n++) {
-                        if (res_vector_in[m] < res_vector_in[n]) {
-                            float temp = res_vector_in[m];
-                            res_vector_in[m] = res_vector_in[n];
-                            res_vector_in[n] = temp;
+                        if (res_VI_raw[m] < res_VI_raw[n]) {
+                            float temp = res_VI_raw[m];
+                            res_VI_raw[m] = res_VI_raw[n];
+                            res_VI_raw[n] = temp;
                         }
                     }
                 }
-                if (((res_vector_in[0] + res_vector_in[1] + res_vector_in[2]) / 3) > 0.15)  //若小于等于呢？
+                if (((res_VI_raw[0] + res_VI_raw[1] + res_VI_raw[2]) / 3) > 0.15)  //若小于等于呢？
                 {
                     int indic = 0;
                     // searching similar pixels
@@ -60,8 +61,9 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                     x_mean = x_sum / nb;
                                     y_mean = y_sum / nb;
                                     for (int k = 0; k < nb; k++) {
-                                        xy_sum += (reference_data[i + si + (j + sj) * ns + k * ns * nl] - x_mean) * (reference_data[i + j * ns + k * ns * nl] - y_mean);
-                                        x2_sum += (reference_data[i + si + (j + sj) * ns + k * ns * nl] - x_mean) * (reference_data[i + si + (j + sj) * ns + k * ns * nl] - x_mean);
+                                        int ind = i + si + (j + sj) * ns + k * ns * nl;
+                                        xy_sum += (reference_data[ind] - x_mean) * (reference_data[i + j * ns + k * ns * nl] - y_mean);
+                                        x2_sum += (reference_data[ind] - x_mean) * (reference_data[ind] - x_mean);
                                         y2_sum += (reference_data[i + j * ns + k * ns * nl] - y_mean) * (reference_data[i + j * ns + k * ns * nl] - y_mean);
                                     }
                                     corr_res[si + win + (sj + win) * (2 * win + 1)] = xy_sum / sqrt(x2_sum * y2_sum);
@@ -76,13 +78,13 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                     int count_tempQA = 0;
                                     for (int k = 0; k < nb; k++) {
                                         for (int yeari = 0; yeari < ny; yeari++) {
-                                            if (img_QA[i + j * ns + k * ns * nl + yeari * ns * nl * nb] <= 1 && 
-                                            img_QA[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] <= 1) {
-                                                if (reference_data[i + j * ns + k * ns * nl] != 0 && reference_data[i + si + (j + sj) * ns + k * ns * nl] != 0) {
-                                                    x_sum += img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl];
+                                            int ind = i + si + (j + sj) * ns + k * ns * nl; 
+                                            if (img_QA[i + j * ns + k * ns * nl + yeari * ns * nl * nb] <= 1 && img_QA[ind + yeari * ns * nl * nb] <= 1) {
+                                                if (reference_data[i + j * ns + k * ns * nl] != 0 && reference_data[ind] != 0) {
+                                                    x_sum += img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind];
                                                     y_sum += img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl];
-                                                    xy_sum += (img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl]) * (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl]);
-                                                    x2_sum += (img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl]) * (img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl]);
+                                                    xy_sum += (img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind]) * (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl]);
+                                                    x2_sum += (img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind]) * (img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind]);
                                                     y2_sum += (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl]) * (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl]);
                                                     count_tempQA++;
                                                 }
@@ -100,10 +102,13 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                         y2_sum = 0;
                                         for (int k = 0; k < nb; k++) {
                                             for (int yeari = 0; yeari < ny; yeari++) {
-                                                if (img_QA[i + j * ns + k * ns * nl + yeari * ns * nl * nb] <= 1 && img_QA[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] <= 1) {
-                                                    if (reference_data[i + j * ns + k * ns * nl] != 0 && reference_data[i + si + (j + sj) * ns + k * ns * nl] != 0) {
-                                                        xy_sum += (img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl] - x_mean) * (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl] - y_mean);
-                                                        x2_sum += (img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl] - x_mean) * (img_NDVI[i + si + (j + sj) * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + si + (j + sj) * ns + k * ns * nl] - x_mean);
+                                                int ind = i + si + (j + sj) * ns + k * ns * nl;
+
+                                                if (img_QA[i + j * ns + k * ns * nl + yeari * ns * nl * nb] <= 1 && img_QA[ind + yeari * ns * nl * nb] <= 1) {
+
+                                                    if (reference_data[i + j * ns + k * ns * nl] != 0 && reference_data[ind] != 0) {
+                                                        xy_sum += (img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind] - x_mean) * (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl] - y_mean);
+                                                        x2_sum += (img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind] - x_mean) * (img_NDVI[ind + yeari * ns * nl * nb] / reference_data[ind] - x_mean);
                                                         y2_sum += (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl] - y_mean) * (img_NDVI[i + j * ns + k * ns * nl + yeari * ns * nl * nb] / reference_data[i + j * ns + k * ns * nl] - y_mean);
                                                     }
                                                 }
@@ -163,7 +168,7 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                     }
 
                     // generate the trend curve
-                    float *trend_NDVI = new float[nb];
+                    float *VI_init = new float[nb];
                     if (aap == 1) {
                         for (int k = 0; k < nb; k++) {
                             float *temp_NDVI = new float[samp];
@@ -189,41 +194,41 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                     if (temp_NDVI[m] != 0)
                                         total_new_temp += corr_similar[m] / total_new_corr_similar * temp_NDVI[m];
                                 }
-                                trend_NDVI[k] = total_new_temp;
+                                VI_init[k] = total_new_temp;
                             } else
-                                trend_NDVI[k] = 0;
+                                VI_init[k] = 0;
 
                             delete[] temp_NDVI;
                         }
 
-                        // generating the trend_NDVI
-                        int count_trend_NDVI = 0;
-                        int count_trend_NDVI_no = 0;
-                        int *res_trend_NDVI = new int[nb];
-                        int *res_trend_NDVI_no = new int[nb];
+                        // generating the VI_init
+                        int count_VI_init = 0;
+                        int count_VI_init_no = 0;
+                        int *res_VI_init = new int[nb];
+                        int *res_VI_init_no = new int[nb];
                         int count_conres = 0;
                         for (int k = 0; k < nb; k++) {
-                            if (trend_NDVI[k] != 0) {
-                                res_trend_NDVI[count_trend_NDVI++] = k;
-                                if (count_trend_NDVI > 1 && k - res_trend_NDVI[count_trend_NDVI - 2] >= 3)
+                            if (VI_init[k] != 0) {
+                                res_VI_init[count_VI_init++] = k;
+                                if (count_VI_init > 1 && k - res_VI_init[count_VI_init - 2] >= 3)
                                     count_conres++;
                             } else
-                                res_trend_NDVI_no[count_trend_NDVI_no++] = k;
+                                res_VI_init_no[count_VI_init_no++] = k;
                         }
-                        if (count_trend_NDVI >= nb / 2 && count_conres == 0) {
-                            for (int m = 0; m < count_trend_NDVI_no; m++) {
+                        if (count_VI_init >= nb / 2 && count_conres == 0) {
+                            for (int m = 0; m < count_VI_init_no; m++) {
                                 int start = 0;
-                                if (res_trend_NDVI_no[m] < res_trend_NDVI[0])
+                                if (res_VI_init_no[m] < res_VI_init[0])
                                     start = 0;
-                                else if (res_trend_NDVI_no[m] > res_trend_NDVI[count_trend_NDVI - 1])
-                                    start = count_trend_NDVI - 4;
+                                else if (res_VI_init_no[m] > res_VI_init[count_VI_init - 1])
+                                    start = count_VI_init - 4;
                                 else {
-                                    for (int n = 0; n < count_trend_NDVI - 1; n++) {
-                                        if (res_trend_NDVI[n] < res_trend_NDVI_no[m] && res_trend_NDVI_no[m] < res_trend_NDVI[n + 1]) {
+                                    for (int n = 0; n < count_VI_init - 1; n++) {
+                                        if (res_VI_init[n] < res_VI_init_no[m] && res_VI_init_no[m] < res_VI_init[n + 1]) {
                                             if (n - 1 < 0)
                                                 start = 0;
-                                            else if (count_trend_NDVI - n < 4)
-                                                start = count_trend_NDVI - 4;
+                                            else if (count_VI_init - n < 4)
+                                                start = count_VI_init - 4;
                                             else
                                                 start = n - 1;
                                             break;
@@ -233,8 +238,8 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
 
                                 float x[4], y[4];
                                 for (int n = 0; n < 4; n++) {
-                                    x[n] = res_trend_NDVI[start + n];
-                                    y[n] = trend_NDVI[res_trend_NDVI[start + n]];
+                                    x[n] = res_VI_init[start + n];
+                                    y[n] = VI_init[res_VI_init[start + n]];
                                 }
 
                                 float sig, p;
@@ -255,24 +260,24 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                 while (khi - klo > 1)  //二分法查找x所在区间段
                                 {
                                     int k = (khi + klo) >> 1;
-                                    if (x[k] > res_trend_NDVI_no[m])
+                                    if (x[k] > res_VI_init_no[m])
                                         khi = k;
                                     else
                                         klo = k;
                                 }
 
                                 float h = x[khi] - x[klo];
-                                float a = (x[khi] - res_trend_NDVI_no[m]) / h;
-                                float b = (res_trend_NDVI_no[m] - x[klo]) / h;
+                                float a = (x[khi] - res_VI_init_no[m]) / h;
+                                float b = (res_VI_init_no[m] - x[klo]) / h;
 
-                                trend_NDVI[res_trend_NDVI_no[m]] = a * y[klo] + b * y[khi] + ((a * a * a - a) * y2[klo] + (b * b * b - b) * y2[khi]) * h * h / 6.0;
+                                VI_init[res_VI_init_no[m]] = a * y[klo] + b * y[khi] + ((a * a * a - a) * y2[klo] + (b * b * b - b) * y2[khi]) * h * h / 6.0;
                             }
                             indic = 1;
                         } else
                             indic = 0;
 
-                        delete[] res_trend_NDVI;
-                        delete[] res_trend_NDVI_no;
+                        delete[] res_VI_init;
+                        delete[] res_VI_init_no;
                     } else
                         indic = 0;
 
@@ -300,8 +305,8 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                     float bv = bv_total / bv_count;
                                     for (int k = 0; k < nb; k++) {
                                         if (vector_QA[k] == 2) {
-                                            vector_in[k] = bv;
-                                            trend_NDVI[k] = bv;
+                                            VI_raw[k] = bv;
+                                            VI_init[k] = bv;
                                         }
                                     }
                                 }
@@ -315,7 +320,7 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                         float mean_fl = 0;
                         for (int k = 0; k < nb; k++) {
                             if (vector_QA[k] == 0 || vector_QA[k] == 1) {
-                                fl[k] = vector_in[k] - trend_NDVI[k];
+                                fl[k] = VI_raw[k] - VI_init[k];
                                 count_fl++;
                                 mean_fl += fl[k];
                             } else
@@ -338,10 +343,10 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                     min_fl = fl[m];
                             }
                             fl[k] = (fl[k] - min_fl) / (max_fl - min_fl);
-                            if ((vector_in[k] - trend_NDVI[k]) >= 0)
-                                gdis += fl[k] * (vector_in[k] - trend_NDVI[k]);
+                            if ((VI_raw[k] - VI_init[k]) >= 0)
+                                gdis += fl[k] * (VI_raw[k] - VI_init[k]);
                             else
-                                gdis += fl[k] * (trend_NDVI[k] - vector_in[k]);
+                                gdis += fl[k] * (VI_init[k] - VI_raw[k]);
                         }
 
                         float *ra4 = new float[nb];
@@ -349,17 +354,17 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                         float ormax = gdis;
                         for (int k = 0; k < nb; k++) {
                             if (vector_QA[k] == 0)
-                                trend_NDVI[k] = vector_in[k];
+                                VI_init[k] = VI_raw[k];
                             if (vector_QA[k] != 0 && vector_QA[k] != 1)
-                                vector_in[k] = trend_NDVI[k];
+                                VI_raw[k] = VI_init[k];
                         }
 
                         int loop_times = 1;
                         while (gdis <= ormax && loop_times < 50) {
                             loop_times += 1;
                             for (int k = 0; k < nb; k++) {
-                                ra4[k] = (vector_in[k] >= trend_NDVI[k]) ? vector_in[k] : trend_NDVI[k];
-                                pre[k] = trend_NDVI[k];
+                                ra4[k] = (VI_raw[k] >= VI_init[k]) ? VI_raw[k] : VI_init[k];
+                                pre[k] = VI_init[k];
                             }
                             // The Savitzky - Golay fitting
                             // savgolFilter = SAVGOL(4, 4, 0, 6); set the window width(4, 4) and degree(6) for repetition
@@ -379,17 +384,17 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                 float temp = 0;
                                 for (int n = 0; n < savgolFilterW; n++)
                                     temp += savgolFilter[n] * new_ra4[m + n];
-                                trend_NDVI[m] = temp;
+                                VI_init[m] = temp;
                             }
                             delete[] new_ra4;
                             ormax = gdis;
                             // Calculate the fitting-effect index
                             gdis = 0.0;
                             for (int k = 0; k < nb; k++) {
-                                if ((vector_in[k] - trend_NDVI[k]) >= 0)
-                                    gdis += fl[k] * (vector_in[k] - trend_NDVI[k]);
+                                if ((VI_raw[k] - VI_init[k]) >= 0)
+                                    gdis += fl[k] * (VI_raw[k] - VI_init[k]);
                                 else
-                                    gdis += fl[k] * (trend_NDVI[k] - vector_in[k]);
+                                    gdis += fl[k] * (VI_init[k] - VI_raw[k]);
                             }
                         }
                         delete[] fl;
@@ -415,7 +420,7 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                             vector_out[i - win + (j - win) * (ns - 2 * win) + k * (ns - 2 * win) * (nl - 2 * win) + y * (ns - 2 * win) * (nl - 2 * win) * nb] = pre[k];
                         delete[] pre;
                     }
-                    delete[] trend_NDVI;
+                    delete[] VI_init;
 
                     // SG filter
                     if (indic == 0) {
@@ -441,7 +446,7 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                     float bv = bv_total / bv_count;
                                     for (int k = 0; k < nb; k++) {
                                         if (vector_QA[k] == 2) {
-                                            vector_in[k] = bv;
+                                            VI_raw[k] = bv;
                                         }
                                     }
                                 }
@@ -459,8 +464,8 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                             int x = 0;
                             int l = 0;
                             if (res_vector_QA[count_vector_QA - 1] != nb - 1) {
-                                k = (vector_in[res_vector_QA[count_vector_QA - 1]] - vector_in[res_vector_QA[count_vector_QA - 2]]) / (res_vector_QA[count_vector_QA - 1] - res_vector_QA[count_vector_QA - 2]);
-                                vector_in[nb - 1] = vector_in[res_vector_QA[count_vector_QA - 1]] + k * (nb - 1 - res_vector_QA[count_vector_QA - 1]);
+                                k = (VI_raw[res_vector_QA[count_vector_QA - 1]] - VI_raw[res_vector_QA[count_vector_QA - 2]]) / (res_vector_QA[count_vector_QA - 1] - res_vector_QA[count_vector_QA - 2]);
+                                VI_raw[nb - 1] = VI_raw[res_vector_QA[count_vector_QA - 1]] + k * (nb - 1 - res_vector_QA[count_vector_QA - 1]);
                                 res_vector_QA[count_vector_QA++] = nb - 1;
                             }
                             int count_res_vector_QA = count_vector_QA;
@@ -468,8 +473,8 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                 l = res_vector_QA[x + 1] - res_vector_QA[x];
                                 int n = 1;
                                 while (l > 1) {
-                                    k = (vector_in[res_vector_QA[x + 1]] - vector_in[res_vector_QA[x]]) / (res_vector_QA[x + 1] - res_vector_QA[x]);
-                                    vector_in[res_vector_QA[x] + n] = vector_in[res_vector_QA[x]] + k * n;
+                                    k = (VI_raw[res_vector_QA[x + 1]] - VI_raw[res_vector_QA[x]]) / (res_vector_QA[x + 1] - res_vector_QA[x]);
+                                    VI_raw[res_vector_QA[x] + n] = VI_raw[res_vector_QA[x]] + k * n;
                                     count_vector_QA++;
                                     n++;
                                     l--;
@@ -477,11 +482,11 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                                 x++;
                             }
                             if (res_vector_QA[0] != 0) {
-                                k = (vector_in[res_vector_QA[1]] - vector_in[res_vector_QA[0]]) / (res_vector_QA[1] - res_vector_QA[0]);
+                                k = (VI_raw[res_vector_QA[1]] - VI_raw[res_vector_QA[0]]) / (res_vector_QA[1] - res_vector_QA[0]);
                                 l = res_vector_QA[0];
                                 int n = 0;
                                 do {
-                                    vector_in[n] = vector_in[res_vector_QA[0]] - k * l;
+                                    VI_raw[n] = VI_raw[res_vector_QA[0]] - k * l;
                                     n++;
                                     l--;
                                 } while (l >= 1);
@@ -493,33 +498,33 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                         // savgolFilter = SAVGOL(4, 4, 0, 2); set the window width(4, 4) and degree(2) for computing trend curve
                         double savgolFilter[] = {-0.0909091, 0.0606061, 0.168831, 0.233766, 0.255411, 0.233766, 0.168831, 0.0606061, -0.0909091};
                         int savgolFilterW = sizeof(savgolFilter) / sizeof(savgolFilter[0]);
-                        int vector_inW = nb;
-                        float *new_vector_in = new float[savgolFilterW + vector_inW - 1];
-                        for (int m = 0; m < savgolFilterW + vector_inW - 1; m++) {
+                        int VI_rawW = nb;
+                        float *new_VI_raw = new float[savgolFilterW + VI_rawW - 1];
+                        for (int m = 0; m < savgolFilterW + VI_rawW - 1; m++) {
                             if (m < (savgolFilterW - 1) / 2)
-                                new_vector_in[m] = vector_in[0];
-                            else if (m > ((savgolFilterW - 1) / 2 + vector_inW - 1))
-                                new_vector_in[m] = vector_in[vector_inW - 1];
+                                new_VI_raw[m] = VI_raw[0];
+                            else if (m > ((savgolFilterW - 1) / 2 + VI_rawW - 1))
+                                new_VI_raw[m] = VI_raw[VI_rawW - 1];
                             else
-                                new_vector_in[m] = vector_in[m - (savgolFilterW - 1) / 2];
+                                new_VI_raw[m] = VI_raw[m - (savgolFilterW - 1) / 2];
                         }
-                        for (int m = 0; m < vector_inW; m++) {
+                        for (int m = 0; m < VI_rawW; m++) {
                             float temp = 0;
                             for (int n = 0; n < savgolFilterW; n++)
-                                temp += savgolFilter[n] * new_vector_in[m + n];
+                                temp += savgolFilter[n] * new_VI_raw[m + n];
                             rst[m] = temp;
                         }
-                        delete[] new_vector_in;
+                        delete[] new_VI_raw;
 
                         // Calculate the weights for each point
                         float gdis = 0.0;
                         float *fl = new float[nb];
                         float maxdif = 0;
                         for (int k = 0; k < nb; k++) {
-                            if ((vector_in[k] - rst[k]) >= 0)
-                                fl[k] = vector_in[k] - rst[k];
+                            if ((VI_raw[k] - rst[k]) >= 0)
+                                fl[k] = VI_raw[k] - rst[k];
                             else
-                                fl[k] = rst[k] - vector_in[k];
+                                fl[k] = rst[k] - VI_raw[k];
 
                             if (k == 0)
                                 maxdif = fl[k];
@@ -529,12 +534,12 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                             }
                         }
                         for (int k = 0; k < nb; k++) {
-                            if (vector_in[k] >= rst[k]) {
+                            if (VI_raw[k] >= rst[k]) {
                                 fl[k] = 1.0;
-                                gdis = gdis + fl[k] * (vector_in[k] - rst[k]);
+                                gdis = gdis + fl[k] * (VI_raw[k] - rst[k]);
                             } else {
-                                fl[k] = 1 - (rst[k] - vector_in[k]) / maxdif;
-                                gdis = gdis + fl[k] * (rst[k] - vector_in[k]);
+                                fl[k] = 1 - (rst[k] - VI_raw[k]) / maxdif;
+                                gdis = gdis + fl[k] * (rst[k] - VI_raw[k]);
                             }
                         }
 
@@ -545,7 +550,7 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                         while (gdis <= ormax && loop_times < 15) {
                             loop_times += 1;
                             for (int k = 0; k < nb; k++) {
-                                ra4[k] = (vector_in[k] >= rst[k]) ? vector_in[k] : rst[k];
+                                ra4[k] = (VI_raw[k] >= rst[k]) ? VI_raw[k] : rst[k];
                                 pre[k] = rst[k];
                             }
                             // The Savitzky - Golay fitting
@@ -573,10 +578,10 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                             // Calculate the fitting - effect index
                             gdis = 0.0;
                             for (int k = 0; k < nb; k++) {
-                                if ((vector_in[k] - rst[k]) >= 0)
-                                    gdis = gdis + fl[k] * (vector_in[k] - rst[k]);
+                                if ((VI_raw[k] - rst[k]) >= 0)
+                                    gdis = gdis + fl[k] * (VI_raw[k] - rst[k]);
                                 else
-                                    gdis = gdis + fl[k] * (rst[k] - vector_in[k]);
+                                    gdis = gdis + fl[k] * (rst[k] - VI_raw[k]);
                             }
                         }
                         delete[] rst;
@@ -591,9 +596,9 @@ void STSG_filter(int win, float sampcorr, float *img_NDVI, float *img_QA, float 
                     for (int k = 0; k < nb; k++)
                         vector_out[i - win + (j - win) * (ns - 2 * win) + k * (ns - 2 * win) * (nl - 2 * win) + y * (ns - 2 * win) * (nl - 2 * win) * nb] = 0;
                 }
-                delete[] vector_in;
+                delete[] VI_raw;
                 delete[] vector_QA;
-                delete[] res_vector_in;
+                delete[] res_VI_raw;
             }
             delete[] similar_index;
             delete[] slope_intercept;
